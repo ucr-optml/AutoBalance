@@ -2,6 +2,8 @@ import argparse
 import os
 import sys
 import yaml
+import warnings
+warnings.filterwarnings("ignore")
 
 import math
 import numpy as np
