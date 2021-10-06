@@ -8,7 +8,6 @@ import numpy as np
 
 import torch
 
-from utils.fileutils import reopen_file
 from utils.metrics import print_num_params
 
 from core.trainer import train_epoch, eval_epoch

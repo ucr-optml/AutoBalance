@@ -5,7 +5,7 @@ from torchvision.datasets.cifar import CIFAR100, CIFAR10
 from torchvision.transforms import Compose, RandomCrop, Pad, RandomHorizontalFlip, Resize, RandomAffine
 from torchvision.transforms import ToTensor, Normalize
 
-from torch.utils.data import Subset,Dataset
+from torch.utils.data import Subset,Dataset, Sampler
 import torchvision.utils as vutils
 import random
 from torch.utils.data import DataLoader
@@ -43,7 +43,7 @@ class BalancedSampler(Sampler):
             return sum([len(bucket) for bucket in self.buckets]) # Acrually we need to upscale to next full batch
         else:
             return max([len(bucket) for bucket in self.buckets]) * self.bucket_num # Ensures every instance has the chance to be visited in an epoch
-            
+
 def load_cifar10(train_size=4000,train_rho=0.01,val_size=1000,val_rho=1,image_size=32,batch_size=128,num_workers=4,path='./data',num_classes=10,balance_val=False):
     train_transform = Compose([
         RandomCrop(32,padding=4),

@@ -5,12 +5,45 @@ from torchvision.datasets.cifar import CIFAR100, CIFAR10
 from torchvision.transforms import Compose, RandomCrop, Pad, RandomHorizontalFlip, Resize, RandomAffine
 from torchvision.transforms import ToTensor, Normalize
 
-from torch.utils.data import Subset,Dataset
+from torch.utils.data import Subset,Dataset, Sampler
 import torchvision.utils as vutils
 import random
 from torch.utils.data import DataLoader
 import numpy as np
 import random
+
+class BalancedSampler(Sampler):
+    def __init__(self, buckets, retain_epoch_size=False):
+        for bucket in buckets:
+            random.shuffle(bucket)
+
+        self.bucket_num = len(buckets)
+        self.buckets = buckets
+        self.bucket_pointers = [0 for _ in range(self.bucket_num)]
+        self.retain_epoch_size = retain_epoch_size
+    
+    def __iter__(self):
+        count = self.__len__()
+        while count > 0:
+            yield self._next_item()
+            count -= 1
+
+    def _next_item(self):
+        bucket_idx = random.randint(0, self.bucket_num - 1)
+        bucket = self.buckets[bucket_idx]
+        item = bucket[self.bucket_pointers[bucket_idx]]
+        self.bucket_pointers[bucket_idx] += 1
+        if self.bucket_pointers[bucket_idx] == len(bucket):
+            self.bucket_pointers[bucket_idx] = 0
+            random.shuffle(bucket)
+        return item
+
+    def __len__(self):
+        if self.retain_epoch_size:
+            return sum([len(bucket) for bucket in self.buckets]) # Acrually we need to upscale to next full batch
+        else:
+            return max([len(bucket) for bucket in self.buckets]) * self.bucket_num # Ensures every instance has the chance to be visited in an epoch
+            
 def load_cifar100(train_size=400,train_rho=0.1,val_size=100,val_rho=1,image_size=32,batch_size=128,num_workers=4,path='./data',num_classes=100,balance_val=False):
     train_transform = Compose([
         RandomCrop(32,padding=4),
