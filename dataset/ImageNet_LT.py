@@ -87,15 +87,34 @@ class ImageNetLTDataLoader(DataLoader):
             transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
         ])
 
+        self.dataset=LT_Dataset(data_dir, data_dir + '/ImageNet_LT_train.txt', train_trsfm)
+        self.val_dataset = LT_Dataset(data_dir, data_dir + '/ImageNet_LT_val.txt', test_trsfm)
+        self.num_classes=len(np.unique(self.dataset.targets))
+        assert self.num_classes == 1000
+        self.n_samples = len(self.dataset)
+        train_size,val_size=self.get_train_val_size()
+        #print(train_size,val_size)
+        #print(max(train_size),min(train_size))
+        permutation=np.argsort(train_size)[::-1]
+        # for p,num in zip(permutation,train_size):
+        #     print("permutation",p,num)
+        
         if training:
             dataset = LT_Dataset(data_dir, data_dir + '/ImageNet_LT_train.txt', train_trsfm)
             val_dataset = LT_Dataset(data_dir, data_dir + '/ImageNet_LT_val.txt', test_trsfm)
+            
         else: # test
             dataset = LT_Dataset(data_dir, data_dir + '/ImageNet_LT_test.txt', test_trsfm)
             val_dataset = None
 
         self.dataset = dataset
         self.val_dataset = val_dataset
+        self.dataset.targets=[np.where(permutation==i)[0][0] for i in self.dataset.targets]
+        self.dataset.labels=[np.where(permutation==i)[0][0] for i in self.dataset.labels]
+        
+        if self.val_dataset:
+            self.val_dataset.targets=[permutation[i] for i in self.val_dataset.targets]
+            self.val_dataset.labels=[permutation[i] for i in self.val_dataset.labels]
 
         self.n_samples = len(self.dataset)
 
@@ -107,6 +126,7 @@ class ImageNetLTDataLoader(DataLoader):
             cls_num_list[label] += 1
 
         self.cls_num_list = cls_num_list
+        print("cls_num",cls_num_list)
 
         if balanced:
             if training:

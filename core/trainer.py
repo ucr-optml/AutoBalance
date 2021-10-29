@@ -45,6 +45,8 @@ def train_epoch(
     for cur_iter, (low_data, low_targets) in enumerate(low_loader):
         #print(cur_iter)
         # Transfer the data to the current GPU device
+        if cur_iter%5==0:
+            print(cur_iter,len(low_loader))
         low_data, low_targets = low_data.to(device=device, non_blocking=True), low_targets.to(device=device, non_blocking=True)
         # Update architecture
         if is_up:
@@ -150,6 +152,8 @@ def eval_epoch(data_loader, model, criterion, cur_epoch, text, args, params=None
     class_total=np.zeros(num_classes,dtype=float)
 
     for cur_iter, (data, targets) in enumerate(data_loader):
+        if cur_iter%5==0:
+            print(cur_iter,len(data_loader))
         data, targets = data.cuda(), targets.cuda(non_blocking=True)
         logits = model(data)
          

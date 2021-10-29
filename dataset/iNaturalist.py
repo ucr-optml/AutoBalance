@@ -39,6 +39,25 @@ def load_taxonomy(ann_data, tax_levels, classes):
 
 class INAT(data.Dataset):
     def __init__(self, root, ann_file, is_train=True, split=0):
+        train_filename="train2018.json"
+        test_filename="val2018.json"
+
+        # load train to get permutation
+        train_path=f"{root}/{train_filename}"
+        with open(train_path) as data_file:
+            train_data=json.load(data_file)
+        imgs = [aa['file_name'] for aa in train_data['images']]
+        if 'annotations' in train_data.keys():
+            self.classes = [aa['category_id'] for aa in train_data['annotations']]
+        else:
+            self.classes = [0]*len(imgs)
+        self.num_classes=len(set(self.classes))
+        num_train_samples = [0 for _ in range(self.num_classes)]
+        for label in self.classes:
+            num_train_samples[label]+=1
+        permutation=np.argsort(num_train_samples)[::-1]
+
+        #print(train_size)
 
         # load annotations
         print('Loading annotations from: ' + os.path.basename(ann_file))
@@ -69,13 +88,13 @@ class INAT(data.Dataset):
                 labels=np.array(self.classes)
                 for i in range(self.num_classes):
                     #print((np.where(labels==i)[0]),len((np.where(labels==i)[0])),(np.where(labels==i)[0])*0.8)
-                    selected_len=math.ceil(len((np.where(labels==i)[0]))*0.8)
+                    selected_len=len((np.where(labels==i)[0]))-math.ceil(len((np.where(labels==i)[0]))*0.2)
                     selected_index.extend(np.where(labels==i)[0][:selected_len])
             elif split==2:
                 labels=np.array(self.classes)
                 for i in range(self.num_classes):
                     #print((np.where(labels==i)[0]),len((np.where(labels==i)[0])),(np.where(labels==i)[0])*0.8)
-                    selected_len=math.floor(len((np.where(labels==i)[0]))*0.2)
+                    selected_len=math.ceil(len((np.where(labels==i)[0]))*0.2)
                     selected_index.extend(np.where(labels==i)[0][-selected_len:])
             np.random.shuffle(selected_index)
             self.imgs=np.array(self.imgs)[selected_index]
@@ -83,6 +102,10 @@ class INAT(data.Dataset):
         # print out some stats
         print ('\t' + str(len(self.imgs)) + ' images')
         print ('\t' + str(len(set(self.classes))) + ' classes')
+        #for i in self.classes:
+        #    print(num_train_samples[i],np.where(permutation==i)[0][0])
+        self.classes=[np.where(permutation==i)[0][0] for i in self.classes]
+        
 
         self.root = root
         self.is_train = is_train
@@ -130,17 +153,22 @@ class INAT(data.Dataset):
         return len(self.imgs)
     
     def get_class_size(self):
-        from collections import Counter
-        values=list(Counter(self.classes).values())
-        values=np.flip(np.sort(values))
-        print(len(values),values)
-        return values
+        #from collections import Counter
+        #values=list(Counter(self.classes).values())
+        num_train_samples = [0 for _ in range(self.num_classes)]
+        for label in self.classes:
+            num_train_samples[label]+=1
+        #values=np.flip(np.sort(values))
+        print(len(num_train_samples),num_train_samples)
+        return num_train_samples
 
 
-# train_data=INAT('./data/inat_2018','./data/inat_2018/train2018.json',is_train=True)
+# train_data=INAT('/home/eeres/mili/data/inat_2018','/home/eeres/mili/data/inat_2018/train2018.json',is_train=True)
+
 # from collections import Counter
 # values=list(Counter(train_data.classes).values())
 # print(values)
+# print(max(values),min(values))
 # values=np.flip(np.sort(values))
 # print(values)
 
@@ -159,7 +187,7 @@ class INAT(data.Dataset):
 #     if i<1000:
 #         color1.append('tab:blue')
 #     else:
-#         color1.append('tab:orange')
+#         color1.append('tab:blue')
 # plt.bar(range(classes),data,color=color1,width=0.98)
 
 # plt.xticks(fontsize=14)
@@ -172,7 +200,15 @@ class INAT(data.Dataset):
 
 # handles = [plt.Rectangle((0,0),1,1, color=colors[label]) for label in labels]
 # #handles = [artist(label) for label in labels]
-# plt.legend(handles, labels,fontsize=18)
-# plt.yscale('log')
-# plt.savefig('figs/figure_intro_distribution_log.pdf')
+# #plt.legend(handles, labels,fontsize=18)
+# #plt.yscale('log')
+# plt.savefig('results/figs/figure_intro_distribution_log.pdf')
 # plt.show()
+
+
+# train_data=INAT('/home/eeres/mili/data/inat_2018','/home/eeres/mili/data/inat_2018/train2018.json',is_train=True)
+
+# from collections import Counter
+# values=list(Counter(train_data.classes).values())
+# for k in zip(train_data.classes,train_data.ids):
+#     print(k)

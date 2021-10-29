@@ -44,7 +44,7 @@ class BalancedSampler(Sampler):
         else:
             return max([len(bucket) for bucket in self.buckets]) * self.bucket_num # Ensures every instance has the chance to be visited in an epoch
             
-def load_cifar100(train_size=400,train_rho=0.1,val_size=100,val_rho=1,image_size=32,batch_size=128,num_workers=4,path='./data',num_classes=100,balance_val=False):
+def load_cifar100(train_size=400,train_rho=0.01,val_size=100,val_rho=0.01,image_size=32,batch_size=128,num_workers=4,path='./data',num_classes=100,balance_val=False):
     train_transform = Compose([
         RandomCrop(32,padding=4),
         #Resize(image_size, BICUBIC),
@@ -84,7 +84,8 @@ def load_cifar100(train_size=400,train_rho=0.1,val_size=100,val_rho=1,image_size
         for i in range(num_classes):
             num_total_samples.append(ceil(total_size*(train_mu**i)))
             num_train_samples.append(ceil(train_size*(train_mu**i)))
-            num_val_samples.append(num_total_samples[-1]-num_train_samples[-1])
+            num_val_samples.append(ceil(val_size*(val_mu**i)))
+            #num_val_samples.append(num_total_samples[-1]-num_train_samples[-1])
             #num_val_samples.append(round(val_size*(val_mu**i)))
     elif balance_val:
         train_mu=train_rho**(1./(num_classes-1.))

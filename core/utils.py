@@ -51,6 +51,22 @@ def loss_adjust_cross_entropy(logits, targets, params, group_size=1):
         loss = F.cross_entropy(x, targets)
     return loss
 
+def loss_adjust_cross_entropy_cdt(logits, targets, params, group_size=1):
+    dy = params[0]
+    ly = params[1]
+    if group_size != 1:
+        new_dy = dy.repeat_interleave(group_size)
+        new_ly = ly.repeat_interleave(group_size)
+        x = logits*new_dy+new_ly
+    else:
+        x = logits*dy+ly
+    if len(params) == 3:
+        wy = params[2]
+        loss = F.cross_entropy(x, targets, weight=wy)
+    else:
+        loss = F.cross_entropy(x, targets)
+    return loss
+
 
 def cdt_cross_entropy(logits, targets, params, group_size=1):
     dy = params[0]
@@ -134,6 +150,13 @@ def get_init_dy(args, num_train_samples):
     elif dy_init == 'CDT':
         gamma = args["up_configs"]["dy_CDT_gamma"]
         dy = get_CDT_params(num_train_samples, gamma, device=device)
+    elif dy_init == 'Retrain':
+        dy = args["result"]["dy"][-1]
+        from scipy import interpolate
+        x=range(group_size//2,num_classes,group_size)
+        inperp_func=interpolate.interp1d(x,dy,fill_value="extrapolate",kind="linear")
+        dy=inperp_func(range(0,num_classes,1))
+        dy = torch.tensor(dy, dtype=torch.float32, device=device)
     else:
         file = open(dy_init, mode='r')
         dy = file.readline().replace(
@@ -157,6 +180,13 @@ def get_init_ly(args, num_train_samples):
     elif ly_init == 'LA':
         ly = get_LA_params(num_train_samples,
                            args["up_configs"]["ly_LA_tau"], device)
+    elif ly_init == 'Retrain':
+        ly = args["result"]["ly"][-1]
+        from scipy import interpolate
+        x=range(group_size//2,num_classes,group_size)
+        inperp_func=interpolate.interp1d(x,ly,fill_value="extrapolate",kind="linear")
+        ly=inperp_func(range(0,num_classes,1))
+        ly = torch.tensor(ly, dtype=torch.float32, device=device)
     else:
         file = open(ly_init, mode='r')
         ly = file.readline().replace(
@@ -177,6 +207,10 @@ def get_train_w(args, num_train_samples):
     elif wy_init == 'Pi':
         w_train = np.sum(num_train_samples)/num_train_samples
         w_train = w_train/np.linalg.norm(w_train)
+        w_train = w_train/np.median(w_train)
+        w_train = torch.tensor(w_train, dtype=torch.float32, device=device)
+    elif wy_init == 'Retrain':
+        w_train = args["result"]["w_train"][-1]
         w_train = torch.tensor(w_train, dtype=torch.float32, device=device)
     w_train.requires_grad = args["up_configs"]["wy"]
     return w_train

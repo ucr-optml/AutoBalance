@@ -13,7 +13,7 @@ import torch
 from utils.metrics import print_num_params
 
 from core.trainer import train_epoch, eval_epoch
-from core.utils import loss_adjust_cross_entropy, cross_entropy,loss_adjust_cross_entropy_cdt
+from core.utils import loss_adjust_cross_entropy, cross_entropy
 from core.utils import get_init_dy, get_init_ly, get_train_w, get_val_w
 
 from dataset.ImageNet_LT import ImageNetLTDataLoader
@@ -27,10 +27,9 @@ from models.ResNet import ResNet32
 import torch.optim as optim
 import torch.nn as nn
 from torch.utils.data import DataLoader
+
 assert torch.cuda.is_available()
 assert torch.backends.cudnn.enabled
-
-
 torch.backends.cudnn.benchmark = True
 
 parser = argparse.ArgumentParser()
@@ -39,23 +38,36 @@ parser.add_argument('--config', dest='config',
 args = parser.parse_args()
 with open(args.config, mode='r') as f:
     args = yaml.load(f, Loader=yaml.FullLoader)
+
+assert os.path.exists(args["save_path"])
+args["up_configs"]["dy"]=False
+args["up_configs"]["ly"]=False
+args["up_configs"]["wy"]=False
+args["up_configs"]["aug"]=False
+args["up_configs"]["ly_init"]="Retrain"
+args["up_configs"]["dy_init"]="Retrain"
+args["up_configs"]["wy_init"]="Retrain"
+args["up_configs"]["aug_init"]="Retrain"
+args["up_configs"]["start_epoch"]=10000
+args["up_configs"]["end_epoch"]=-1
+
 device = args["device"]
 dataset = args["dataset"]
 if dataset == 'Cifar10':
     num_classes = 10
     model = ResNet32(num_classes=num_classes)
     train_loader, val_loader, test_loader, eval_train_loader, eval_val_loader, num_train_samples, num_val_samples = load_cifar10(
-        train_size=args["train_size"], val_size=args["val_size"],
+        train_size=args["train_size"]+args["val_size"], val_size=args["val_size"],
         balance_val=args["balance_val"], batch_size=args["low_batch_size"],
-        train_rho=args["train_rho"],
+        train_rho=args["train_rho"], val_rho=args["train_rho"],
         image_size=32, path=args["datapath"])
 elif dataset == 'Cifar100':
     num_classes = 100
     model = ResNet32(num_classes=num_classes)
     train_loader, val_loader, test_loader, eval_train_loader, eval_val_loader, num_train_samples, num_val_samples = load_cifar100(
-        train_size=args["train_size"], val_size=args["val_size"],
+        train_size=args["train_size"]+args["val_size"], val_size=args["val_size"],
         balance_val=args["balance_val"], batch_size=args["low_batch_size"],
-        train_rho=args["train_rho"],
+        train_rho=args["train_rho"], val_rho=args["train_rho"],
         image_size=32, path=args["datapath"])
 elif dataset == 'ImageNet':
     num_classes = 1000
@@ -63,11 +75,11 @@ elif dataset == 'ImageNet':
     model = nn.DataParallel(model, device_ids=[0, 1])
 
     train_loader = ImageNetLTDataLoader(
-        args["datapath"],
+        '~/data/imagenet/ILSVRC/Data/CLS-LOC',
         training=True, batch_size=args["low_batch_size"])
     val_loader = train_loader.split_validation()
     test_loader = ImageNetLTDataLoader(
-        args["datapath"],
+        '~/imagenet/ILSVRC/Data/CLS-LOC',
         training=False, batch_size=args["low_batch_size"])
 
     num_train_samples, num_val_samples = train_loader.get_train_val_size()
@@ -78,37 +90,29 @@ elif dataset == 'INAT':
     num_classes = 8142
     model = models.resnet50(pretrained=False, num_classes=num_classes)
     model = nn.DataParallel(model, device_ids=[0, 1])
-    train_loader = INAT('/home/eeres/mili/data/inat_2018/', '/home/eeres/mili/data/inat_2018/train2018.json',
+    train_loader = INAT('~/data/inat_2018/', '~/data/inat_2018/train2018.json',
                         is_train=True, split=1)
     num_train_samples = train_loader.get_class_size()
-    train_loader = DataLoader(train_loader, batch_size=args["low_batch_size"],num_workers=6)
-    val_loader = INAT('/home/eeres/mili/data/inat_2018/', '/home/eeres/mili/data/inat_2018/train2018.json',
+    train_loader = DataLoader(train_loader, batch_size=args["low_batch_size"])
+    val_loader = INAT('~/data/inat_2018/', '~/data/inat_2018/train2018.json',
                       is_train=True, split=2)
     num_val_samples = val_loader.get_class_size()
-    val_loader = DataLoader(val_loader, batch_size=args["low_batch_size"],num_workers=6)
-
-    test_loader = INAT('/home/eeres/mili/data/inat_2018/', '/home/eeres/mili/data/inat_2018/val2018.json',
+    val_loader = DataLoader(val_loader, batch_size=args["low_batch_size"])
+    test_loader = INAT('~/data/inat_2018/', '~/data/inat_2018/val2018.json',
                        is_train=False, split=0)
-    test_loader.get_class_size()
-    test_loader= DataLoader(test_loader,batch_size=512,num_workers=6)
-
-    eval_train_loader = INAT('/home/eeres/mili/data/inat_2018/', '/home/eeres/mili/data/inat_2018/train2018.json',
-                        is_train=False, split=1)
-    eval_train_loader = DataLoader(eval_train_loader, batch_size=512,num_workers=6)
-    eval_val_loader = INAT('/home/eeres/mili/data/inat_2018/', '/home/eeres/mili/data/inat_2018/train2018.json',
-                      is_train=False, split=2)
-    eval_val_loader = DataLoader(eval_val_loader, batch_size=512,num_workers=6)
 
 args["num_classes"] = num_classes
 
 print_num_params(model)
 
-if args["checkpoint"] != 0:
-    model = torch.load(f'{args["save_path"]}/epoch_{args.checkpoint}.pth')
-    # model.load_state_dict(torch.load(f'{args["save_path"]}/epoch_{args.checkpoint}.pth'))
+model = torch.load(f'{args["save_path"]}/init_model.pth')
 model = model.to(device)
 
 criterion = nn.CrossEntropyLoss()
+
+with open(f'{args["save_path"]}/result.yaml','r') as f:
+    args["result"]=yaml.load(f,Loader=yaml.FullLoader)
+
 
 dy = get_init_dy(args, num_train_samples)
 ly = get_init_ly(args, num_train_samples)
@@ -118,9 +122,10 @@ w_val = get_val_w(args, num_val_samples)
 print(f"w_train: {w_train}\nw_val: {w_val}")
 print('ly', ly, '\n dy', dy)
 
-print("train data size",len(train_loader.dataset),len(train_loader))
-
 if dataset == 'Cifar10' or dataset == 'Cifar100':
+    args["epoch"]=200
+    args["low_lr_schedule"]=[160,180]
+    args["up_lr_schedule"]=[160,180]
     up_start_epoch=args["up_configs"]["start_epoch"]
     def warm_up_with_multistep_lr_low(epoch): return (epoch+1) / args["low_lr_warmup"] \
         if epoch < args["low_lr_warmup"] \
@@ -142,9 +147,9 @@ elif dataset == 'ImageNet' or dataset == 'INAT':
          (epoch+1) / args["low_lr_warmup"] if epoch < args["low_lr_warmup"] \
             else 0.5*(math.cos((epoch - args["low_lr_warmup"]) / (args["epoch"]-args["low_lr_warmup"])*math.pi)+1)
     up_start_epoch=args["up_configs"]["start_epoch"]
-    def warm_up_with_multistep_lr_low(epoch): return (epoch+1) / args["low_lr_warmup"] \
-        if epoch < args["low_lr_warmup"] \
-        else 0.1**len([m for m in args["low_lr_schedule"] if m <= epoch])
+    # def warm_up_with_multistep_lr_low(epoch): return (epoch+1) / args["low_lr_warmup"] \
+    #     if epoch < args["low_lr_warmup"] \
+    #     else 0.1**len([m for m in args["low_lr_schedule"] if m <= epoch])
 
     def warm_up_with_multistep_lr_up(epoch): return (epoch-up_start_epoch+1) / args["up_lr_warmup"] \
         if epoch-up_start_epoch < args["up_lr_warmup"] \
@@ -158,44 +163,36 @@ elif dataset == 'ImageNet' or dataset == 'INAT':
     train_lr_scheduler = optim.lr_scheduler.LambdaLR(
         train_optimizer, lr_lambda=warm_up_with_cosine_lr_low)
     val_lr_scheduler = optim.lr_scheduler.LambdaLR(
-        val_optimizer, lr_lambda=warm_up_with_cosine_lr_low  )
+        val_optimizer, lr_lambda=warm_up_with_multistep_lr_up)
 
 
-if args["save_path"] is None:
-    import time
-    args["save_path"] = f'./results/{int(time.time())}'
-if not os.path.exists(args["save_path"]):
-    os.makedirs(args["save_path"])
+if not os.path.exists(f'{args["save_path"]}/retrain'):
+    os.makedirs(f'{args["save_path"]}/retrain')
 
-assert(args["checkpoint"] == 0)
 
-torch.save(model, f'{args["save_path"]}/init_model.pth')
-logfile = open(f'{args["save_path"]}/logs.txt', mode='w')
-dy_log = open(f'{args["save_path"]}/dy.txt', mode='w')
-ly_log = open(f'{args["save_path"]}/ly.txt', mode='w')
-err_log = open(f'{args["save_path"]}/err.txt', mode='w')
-with open(f'{args["save_path"]}/config.yaml', mode='w') as config_log:
+
+torch.save(model, f'{args["save_path"]}/retrain/init_model.pth')
+logfile = open(f'{args["save_path"]}/retrain/logs.txt', mode='w')
+dy_log = open(f'{args["save_path"]}/retrain/dy.txt', mode='w')
+ly_log = open(f'{args["save_path"]}/retrain/ly.txt', mode='w')
+err_log = open(f'{args["save_path"]}/retrain/err.txt', mode='w')
+with open(f'{args["save_path"]}/retrain/config.yaml', mode='w') as config_log:
     yaml.dump(args, config_log)
 
 save_data = {"ly": [], "dy": [], "w_train": [],
              "train_err": [], "balanced_train_err": [], 
              "val_err": [], "balanced_val_err": [], "test_err": [], "balanced_test_err": []}
-with open(f'{args["save_path"]}/result.yaml', mode='w') as log:
+with open(f'{args["save_path"]}/retrain/result.yaml', mode='w') as log:
     yaml.dump(save_data, log)
+
+args["group_size"]=1
 
 for i in range(args["checkpoint"], args["epoch"]+1):
     if i % args["checkpoint_interval"] == 0:
-        torch.save(model, f'{args["save_path"]}/epoch_{i}.pth')
+        torch.save(model, f'{args["save_path"]}/retrain/epoch_{i}.pth')
 
     if i % args["eval_interval"] == 0:
-        if args["up_configs"]["dy_init"]=="CDT":
-            print("CDT")
-            text, loss, train_err, balanced_train_err = eval_epoch(eval_train_loader, model,
-                                                               loss_adjust_cross_entropy_cdt, i, ' train_dataset', args,
-                                                               params=[dy, ly, w_train])
-                                                            
-        else:
-            text, loss, train_err, balanced_train_err = eval_epoch(eval_train_loader, model,
+        text, loss, train_err, balanced_train_err = eval_epoch(eval_train_loader, model,
                                                                loss_adjust_cross_entropy, i, ' train_dataset', args,
                                                                params=[dy, ly, w_train])
         logfile.write(text+'\n')
@@ -217,7 +214,7 @@ for i in range(args["checkpoint"], args["epoch"]+1):
     save_data["ly"].append(ly.detach().cpu().numpy().tolist())
     save_data["w_train"].append(w_train.detach().cpu().numpy().tolist())
 
-    with open(f'{args["save_path"]}/result.yaml', mode='w') as log:
+    with open(f'{args["save_path"]}/retrain/result.yaml', mode='w') as log:
         yaml.dump(save_data, log)
 
     print('ly', ly, '\n dy', dy, '\n')
@@ -243,4 +240,4 @@ logfile.close()
 dy_log.close()
 ly_log.close()
 err_log.close()
-torch.save(model, f'{args["save_path"]}/final_model.pth')
+torch.save(model, f'{args["save_path"]}/retrain/final_model.pth')
