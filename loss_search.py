@@ -44,6 +44,8 @@ dataset = args["dataset"]
 if dataset == 'Cifar10':
     num_classes = 10
     model = ResNet32(num_classes=num_classes)
+    # if torch.cuda.device_count()>1:
+    #     model = nn.DataParallel(model, device_ids=[0, 1])
     train_loader, val_loader, test_loader, eval_train_loader, eval_val_loader, num_train_samples, num_val_samples = load_cifar10(
         train_size=args["train_size"], val_size=args["val_size"],
         balance_val=args["balance_val"], batch_size=args["low_batch_size"],
@@ -52,6 +54,8 @@ if dataset == 'Cifar10':
 elif dataset == 'Cifar100':
     num_classes = 100
     model = ResNet32(num_classes=num_classes)
+    # if torch.cuda.device_count()>1:
+    #     model = nn.DataParallel(model, device_ids=[0, 1])
     train_loader, val_loader, test_loader, eval_train_loader, eval_val_loader, num_train_samples, num_val_samples = load_cifar100(
         train_size=args["train_size"], val_size=args["val_size"],
         balance_val=args["balance_val"], batch_size=args["low_batch_size"],
@@ -71,8 +75,10 @@ elif dataset == 'ImageNet':
         training=False, batch_size=args["low_batch_size"])
 
     num_train_samples, num_val_samples = train_loader.get_train_val_size()
-    eval_train_loader = train_loader
-    eval_val_loader = val_loader
+    eval_train_loader = ImageNetLTDataLoader(
+        args["datapath"],
+        training=True, batch_size=512)
+    eval_val_loader = eval_train_loader.split_validation()
 
 elif dataset == 'INAT':
     num_classes = 8142
@@ -122,9 +128,14 @@ print("train data size",len(train_loader.dataset),len(train_loader))
 
 if dataset == 'Cifar10' or dataset == 'Cifar100':
     up_start_epoch=args["up_configs"]["start_epoch"]
-    def warm_up_with_multistep_lr_low(epoch): return (epoch+1) / args["low_lr_warmup"] \
-        if epoch < args["low_lr_warmup"] \
-        else 0.1**len([m for m in args["low_lr_schedule"] if m <= epoch])
+    if "low_lr_multiplier" in args:
+        def warm_up_with_multistep_lr_low(epoch): return (epoch+1) / args["low_lr_warmup"] \
+            if epoch < args["low_lr_warmup"] \
+            else args["low_lr_multiplier"][len([m for m in args["low_lr_schedule"] if m <= epoch])]
+    else:
+        def warm_up_with_multistep_lr_low(epoch): return (epoch+1) / args["low_lr_warmup"] \
+            if epoch < args["low_lr_warmup"] \
+            else 0.1**len([m for m in args["low_lr_schedule"] if m <= epoch])
 
     def warm_up_with_multistep_lr_up(epoch): return (epoch-up_start_epoch+1) / args["up_lr_warmup"] \
         if epoch-up_start_epoch < args["up_lr_warmup"] \

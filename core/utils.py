@@ -5,7 +5,7 @@ import torch
 from torch.autograd import grad
 import numpy as np
 from numpy.lib.scimath import log
-
+from scipy import interpolate
 
 def gather_flat_grad(loss_grad):
     #cnt = 0
@@ -126,9 +126,11 @@ def assign_hyper_gradient(params, gradient, num_classes):
             # i+=num_classes
 
 
-def get_LA_params(num_train_samples, tau, device):
+def get_LA_params(num_train_samples, tau, group_size, device):
     pi = num_train_samples/np.sum(num_train_samples)
     pi = tau*log(pi)
+    if group_size!=1:
+        pi=[pi[i] for i in range(group_size//2,len(num_train_samples),group_size)]
     print('Google pi: ', pi)
     pi = torch.tensor(pi, dtype=torch.float32, device=device)
     return pi
@@ -152,10 +154,11 @@ def get_init_dy(args, num_train_samples):
         dy = get_CDT_params(num_train_samples, gamma, device=device)
     elif dy_init == 'Retrain':
         dy = args["result"]["dy"][-1]
-        from scipy import interpolate
-        x=range(group_size//2,num_classes,group_size)
-        inperp_func=interpolate.interp1d(x,dy,fill_value="extrapolate",kind="linear")
-        dy=inperp_func(range(0,num_classes,1))
+        if num_classes//group_size!=len(dy):
+            group_size=num_classes//len(dy)
+            x=range(group_size//2,num_classes,group_size)
+            inperp_func=interpolate.interp1d(x,dy,fill_value="extrapolate",kind="linear")
+            dy=inperp_func(range(0,num_classes,1))
         dy = torch.tensor(dy, dtype=torch.float32, device=device)
     else:
         file = open(dy_init, mode='r')
@@ -179,13 +182,14 @@ def get_init_ly(args, num_train_samples):
                          dtype=torch.float32, device=device)
     elif ly_init == 'LA':
         ly = get_LA_params(num_train_samples,
-                           args["up_configs"]["ly_LA_tau"], device)
+                           args["up_configs"]["ly_LA_tau"], args["group_size"], device)
     elif ly_init == 'Retrain':
         ly = args["result"]["ly"][-1]
-        from scipy import interpolate
-        x=range(group_size//2,num_classes,group_size)
-        inperp_func=interpolate.interp1d(x,ly,fill_value="extrapolate",kind="linear")
-        ly=inperp_func(range(0,num_classes,1))
+        if num_classes//group_size!=len(ly):
+            group_size=num_classes//len(ly)
+            x=range(group_size//2,num_classes,group_size)
+            inperp_func=interpolate.interp1d(x,ly,fill_value="extrapolate",kind="linear")
+            ly=inperp_func(range(0,num_classes,1))
         ly = torch.tensor(ly, dtype=torch.float32, device=device)
     else:
         file = open(ly_init, mode='r')
@@ -200,6 +204,7 @@ def get_train_w(args, num_train_samples):
     num_classes = args["num_classes"]
     wy_init = args["up_configs"]["wy_init"]
     device = args["device"]
+    group_size= args["group_size"]
 
     if wy_init == 'Ones':
         w_train = torch.ones([num_classes], dtype=torch.float32, device=device)
@@ -211,14 +216,23 @@ def get_train_w(args, num_train_samples):
         w_train = torch.tensor(w_train, dtype=torch.float32, device=device)
     elif wy_init == 'Retrain':
         w_train = args["result"]["w_train"][-1]
+        if num_classes//group_size!=len(w_train):
+            group_size=num_classes//len(w_train)
+            x=range(group_size//2,num_classes,group_size)
+            inperp_func=interpolate.interp1d(x,w_train,fill_value="extrapolate",kind="linear")
+            w_train=inperp_func(range(0,num_classes,1))
         w_train = torch.tensor(w_train, dtype=torch.float32, device=device)
     w_train.requires_grad = args["up_configs"]["wy"]
     return w_train
 
 def get_val_w(args, num_val_samples):
     device = args["device"]
-    w_val=np.sum(num_val_samples)/num_val_samples
-    w_val=w_val/np.linalg.norm(w_val)
+    num_classes = args["num_classes"]
+    if args["balance_val"]:
+        w_val = torch.ones([num_classes], dtype=torch.float32, device=device)
+    else:
+        w_val=np.sum(num_val_samples)/num_val_samples
+        w_val=w_val/np.linalg.norm(w_val)
     w_val=torch.tensor(w_val,dtype=torch.float32, device=device)
     w_val.requires_grad=False
     return w_val

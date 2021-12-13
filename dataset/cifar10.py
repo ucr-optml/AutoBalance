@@ -97,6 +97,7 @@ def load_cifar10(train_size=4000,train_rho=0.01,val_size=1000,val_rho=0.01,image
     total_index=[]
     total_index.extend(train_index)
     total_index.extend(val_index)
+    total_index=list(set(total_index))
     random.shuffle(total_index)
     train_x, train_y=train_x[total_index], train_y[total_index]
 

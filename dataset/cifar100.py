@@ -40,7 +40,7 @@ class BalancedSampler(Sampler):
 
     def __len__(self):
         if self.retain_epoch_size:
-            return sum([len(bucket) for bucket in self.buckets]) # Acrually we need to upscale to next full batch
+            return sum([len(bucket) for bucket in self.buckets]) # Actually we need to upscale to next full batch
         else:
             return max([len(bucket) for bucket in self.buckets]) * self.bucket_num # Ensures every instance has the chance to be visited in an epoch
             
@@ -77,29 +77,19 @@ def load_cifar100(train_size=400,train_rho=0.01,val_size=100,val_rho=0.01,image_
     num_total_samples=[]
     num_train_samples=[]
     num_val_samples=[]
+    train_mu=train_rho**(1./(num_classes-1.))
+    val_mu=val_rho**(1./(num_classes-1.))
 
-    if not balance_val:
-        train_mu=train_rho**(1./(num_classes-1.))
-        val_mu=val_rho**(1./(num_classes-1.))
-        for i in range(num_classes):
-            num_total_samples.append(ceil(total_size*(train_mu**i)))
-            num_train_samples.append(ceil(train_size*(train_mu**i)))
-            num_val_samples.append(ceil(val_size*(val_mu**i)))
-            #num_val_samples.append(num_total_samples[-1]-num_train_samples[-1])
-            #num_val_samples.append(round(val_size*(val_mu**i)))
-    elif balance_val:
-        train_mu=train_rho**(1./(num_classes-1.))
-        for i in range(num_classes):
-            num_val_samples.append(val_size)
-            num_total_samples.append(ceil(total_size*(train_mu**i)))
-            num_train_samples.append(ceil(train_size*(train_mu**i)))
-            #num_train_samples.append(num_total_samples[-1]-num_val_samples[-1])
+    for i in range(num_classes):
+        num_total_samples.append(ceil(total_size*(train_mu**i)))
+        num_train_samples.append(ceil(400*(train_mu**i)))
+        num_val_samples.append(ceil(100*(val_mu**i)))
+
 
     train_index=[]
     val_index=[]
     #print(train_x,train_y)
-    print('Train samples: ',np.sum(num_train_samples), num_train_samples)
-    print('Val samples: ',np.sum(num_val_samples),num_val_samples)
+
     for i in range(num_classes):
         #print(np.where(train_y==i)[0].shape)
         train_index.extend(np.where(train_y==i)[0][:num_train_samples[i]])
@@ -109,9 +99,24 @@ def load_cifar100(train_size=400,train_rho=0.01,val_size=100,val_rho=0.01,image_
     total_index=[]
     total_index.extend(train_index)
     total_index.extend(val_index)
+    total_index=list(set(total_index))
     random.shuffle(total_index)
     train_x, train_y=train_x[total_index], train_y[total_index]
     
+    num_total_samples=[]
+    num_train_samples=[]
+    num_val_samples=[]
+
+    train_mu=train_rho**(1./(num_classes-1.))
+    val_mu=val_rho**(1./(num_classes-1.))
+    for i in range(num_classes):
+        num_total_samples.append(ceil(total_size*(train_mu**i)))
+        num_train_samples.append(ceil(train_size*(train_mu**i)))
+        num_val_samples.append(ceil(val_size*(val_mu**i)))
+
+    print('Train samples: ',np.sum(num_train_samples), num_train_samples)
+    print('Val samples: ',np.sum(num_val_samples),num_val_samples)
+
     train_index=[]
     val_index=[]
     #print(train_x,train_y)
@@ -125,6 +130,13 @@ def load_cifar100(train_size=400,train_rho=0.01,val_size=100,val_rho=0.01,image_
     
     train_data,train_targets=train_x[train_index],train_y[train_index]
     val_data,val_targets=train_x[val_index],train_y[val_index]
+
+    if balance_val:
+        print("Balanced Validation dataset")
+        buckets = [[] for _ in range(num_classes)]
+        for idx, label in enumerate(val_targets):
+            buckets[label].append(idx)
+        sampler = BalancedSampler(buckets, False)
     
     train_dataset = CustomDataset(train_data,train_targets,train_transform)
     val_dataset = CustomDataset(val_data,val_targets,train_transform)
@@ -133,8 +145,13 @@ def load_cifar100(train_size=400,train_rho=0.01,val_size=100,val_rho=0.01,image_
     
     train_loader = DataLoader(train_dataset, batch_size=batch_size, num_workers=num_workers, 
                             shuffle=True, drop_last=False, pin_memory=True)
-    val_loader = DataLoader(val_dataset, batch_size=batch_size, num_workers=num_workers, 
-                            shuffle=True, drop_last=False, pin_memory=True)
+    if balance_val:
+        val_loader = DataLoader(val_dataset, batch_size=batch_size, num_workers=num_workers, 
+                            shuffle=False, drop_last=False, pin_memory=True, sampler=sampler)
+    else:
+        val_loader = DataLoader(val_dataset, batch_size=batch_size, num_workers=num_workers, 
+                                shuffle=True, drop_last=False, pin_memory=True)
+
     test_loader = DataLoader(test_dataset, batch_size=batch_size, num_workers=num_workers, 
                             shuffle=False, drop_last=False, pin_memory=True)
 

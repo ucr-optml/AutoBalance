@@ -45,8 +45,8 @@ def train_epoch(
     for cur_iter, (low_data, low_targets) in enumerate(low_loader):
         #print(cur_iter)
         # Transfer the data to the current GPU device
-        if cur_iter%5==0:
-            print(cur_iter,len(low_loader))
+        # if cur_iter%5==0:
+        #     print(cur_iter,len(low_loader))
         low_data, low_targets = low_data.to(device=device, non_blocking=True), low_targets.to(device=device, non_blocking=True)
         # Update architecture
         if is_up:
@@ -140,6 +140,41 @@ def train_epoch(
 
 
 
+# @torch.no_grad()
+# def eval_epoch(data_loader, model, criterion, cur_epoch, text, args, params=None):
+#     num_classes=args["num_classes"]
+#     group_size=args["group_size"]
+#     model.eval()
+#     correct=0.
+#     total=0.
+#     loss=0.
+#     class_correct=np.zeros(num_classes,dtype=float)
+#     class_total=np.zeros(num_classes,dtype=float)
+#     confusion_matrix = torch.zeros(num_classes, num_classes).cuda()
+#     for cur_iter, (data, targets) in enumerate(data_loader):
+#         if cur_iter%5==0:
+#             print(cur_iter,len(data_loader))
+#         data, targets = data.cuda(), targets.cuda(non_blocking=True)
+#         logits = model(data)
+         
+#         preds = logits.data.max(1)[1]
+#         mb_size = data.size(0)
+#         loss+=criterion(logits,targets,params,group_size=group_size).item()*mb_size
+
+#         total+=mb_size
+#         correct+=preds.eq(targets.data.view_as(preds)).sum().item()
+
+
+        
+#         for i in range(num_classes):
+#             indexes=np.where(targets.cpu().numpy()==i)[0]
+#             class_total[i]+=indexes.size
+#             class_correct[i]+=preds[indexes].eq(targets[indexes].data.view_as(preds[indexes])).sum().item()
+
+#     text=f'{text}: Epoch {cur_epoch} :  Loss = {loss/total}   ACC = {correct/total*100.} Balanced ACC = {np.mean(class_correct/class_total*100.)} \n Class wise = {class_correct/class_total*100.}'
+#     print(text)
+#     return text, loss/total, 100.-correct/total*100., 100.-float(np.mean(class_correct/class_total*100.))
+
 @torch.no_grad()
 def eval_epoch(data_loader, model, criterion, cur_epoch, text, args, params=None):
     num_classes=args["num_classes"]
@@ -150,29 +185,24 @@ def eval_epoch(data_loader, model, criterion, cur_epoch, text, args, params=None
     loss=0.
     class_correct=np.zeros(num_classes,dtype=float)
     class_total=np.zeros(num_classes,dtype=float)
-
+    confusion_matrix = torch.zeros(num_classes, num_classes).cuda()
     for cur_iter, (data, targets) in enumerate(data_loader):
-        if cur_iter%5==0:
-            print(cur_iter,len(data_loader))
+        # if cur_iter%5==0:
+        #     print(cur_iter,len(data_loader))
         data, targets = data.cuda(), targets.cuda(non_blocking=True)
         logits = model(data)
          
         preds = logits.data.max(1)[1]
+        for t, p in zip(targets.view(-1), preds.view(-1)):
+            confusion_matrix[t.long(), p.long()] += 1
         mb_size = data.size(0)
         loss+=criterion(logits,targets,params,group_size=group_size).item()*mb_size
-
-        total+=mb_size
-        correct+=preds.eq(targets.data.view_as(preds)).sum().item()
-
-
-        
-        for i in range(num_classes):
-            indexes=np.where(targets.cpu().numpy()==i)[0]
-            class_total[i]+=indexes.size
-            class_correct[i]+=preds[indexes].eq(targets[indexes].data.view_as(preds[indexes])).sum().item()
+    class_correct=confusion_matrix.diag().cpu().numpy()
+    class_total=confusion_matrix.sum(1).cpu().numpy()
+    total=confusion_matrix.sum().cpu().numpy()
+    correct=class_correct.sum()
 
     text=f'{text}: Epoch {cur_epoch} :  Loss = {loss/total}   ACC = {correct/total*100.} Balanced ACC = {np.mean(class_correct/class_total*100.)} \n Class wise = {class_correct/class_total*100.}'
     print(text)
     return text, loss/total, 100.-correct/total*100., 100.-float(np.mean(class_correct/class_total*100.))
-
 

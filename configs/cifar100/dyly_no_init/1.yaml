@@ -1,0 +1,78 @@
+# Dataset, either Cifar10/Cifar100/ImageNet/INAT
+dataset: Cifar100
+datapath: ~/data/
+device: cuda
+# Log and result save path
+save_path: results/cifar100/dyly_no_init/1/
+checkpoint_interval: 30
+eval_interval: 1
+
+# The check point uses to resume the work
+checkpoint: 0
+model_file: ~
+
+train_size: 400
+val_size: 100
+# Group size when apply group aggregation 
+group_size: 10
+
+
+# Model optimization lr (lower level)
+low_lr: 0.1
+low_lr_schedule:
+  - 220
+  - 260
+# Lower level batch size
+low_batch_size: 128
+low_lr_warmup: 10
+epoch: 300
+
+# For CIFAR only, the unbalance factor, 
+# and select wether the validation is balanced or not
+train_rho: 0.01
+balance_val: false
+
+
+# Hyper-parameter optimization lr and schedule (upper level)
+up_lr: 0.1
+up_lr_schedule:
+  - 220
+  - 260
+up_lr_warmup: 40
+# Upper level batch size
+up_train_batch_size: 128
+up_val_batch_size: 128
+
+
+# Upper level configs
+up_configs:
+  # Number of batches when computing hyper-gradient
+  train_batches: 10
+  val_batches: 10
+  # The upper optimization start and end epoch, 
+  end_epoch: 300
+  start_epoch: 120
+  # Interval of iterations/epochs when doing hyper update. 
+  # (It is mostly used to stabilize model training)
+  iter_interval: 20
+  epoch_interval: 1
+  # Select which parameter can be optimized
+  dy: true
+  ly: true
+  wy: false
+  aug: false
+
+  # Any initialization applied to dy,ly,wy
+  ly_init: Zeros 
+  dy_init: Ones
+  wy_init: Ones
+
+  # Parameters if use logit adjustment of CDT initialization
+  ly_LA_tau: ~
+  dy_CDT_gamma: ~
+
+
+
+
+
+
