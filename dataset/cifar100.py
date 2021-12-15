@@ -81,9 +81,13 @@ def load_cifar100(train_size=400,train_rho=0.01,val_size=100,val_rho=0.01,image_
     val_mu=val_rho**(1./(num_classes-1.))
 
     for i in range(num_classes):
-        num_total_samples.append(ceil(total_size*(train_mu**i)))
-        num_train_samples.append(ceil(400*(train_mu**i)))
-        num_val_samples.append(ceil(100*(val_mu**i)))
+        num_total_samples.append(round(total_size*(train_mu**i)))
+        num_val_samples.append(max(1,round(100*(val_mu**i))))
+        num_train_samples.append(num_total_samples[-1]-num_val_samples[-1])
+        
+        #num_total_samples.append(ceil(total_size*(train_mu**i)))
+        #num_train_samples.append(ceil(400*(train_mu**i)))
+        #num_val_samples.append(ceil(100*(val_mu**i)))
 
 
     train_index=[]
@@ -110,9 +114,12 @@ def load_cifar100(train_size=400,train_rho=0.01,val_size=100,val_rho=0.01,image_
     train_mu=train_rho**(1./(num_classes-1.))
     val_mu=val_rho**(1./(num_classes-1.))
     for i in range(num_classes):
-        num_total_samples.append(ceil(total_size*(train_mu**i)))
-        num_train_samples.append(ceil(train_size*(train_mu**i)))
-        num_val_samples.append(ceil(val_size*(val_mu**i)))
+        num_total_samples.append(round(total_size*(train_mu**i)))
+        if not train_size==500:
+            num_train_samples.append(num_total_samples[-1]-num_val_samples[-1])
+        else:
+            num_train_samples.append(round(train_size*(train_mu**i)))
+        num_val_samples.append(max(1,round(val_size*(val_mu**i))))
 
     print('Train samples: ',np.sum(num_train_samples), num_train_samples)
     print('Val samples: ',np.sum(num_val_samples),num_val_samples)
