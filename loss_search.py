@@ -190,7 +190,8 @@ with open(f'{args["save_path"]}/config.yaml', mode='w') as config_log:
 
 save_data = {"ly": [], "dy": [], "w_train": [],
              "train_err": [], "balanced_train_err": [], 
-             "val_err": [], "balanced_val_err": [], "test_err": [], "balanced_test_err": []}
+             "val_err": [], "balanced_val_err": [], "test_err": [], "balanced_test_err": [],
+             "classwise_train_err": [], "classwise_val_err": [], "classwise_test_err": [] }
 with open(f'{args["save_path"]}/result.yaml', mode='w') as log:
     yaml.dump(save_data, log)
 
@@ -201,28 +202,31 @@ for i in range(args["checkpoint"], args["epoch"]+1):
     if i % args["eval_interval"] == 0:
         if args["up_configs"]["dy_init"]=="CDT":
             print("CDT")
-            text, loss, train_err, balanced_train_err = eval_epoch(eval_train_loader, model,
+            text, loss, train_err, balanced_train_err, classwise_train_err = eval_epoch(eval_train_loader, model,
                                                                loss_adjust_cross_entropy_cdt, i, ' train_dataset', args,
                                                                params=[dy, ly, w_train])
                                                             
         else:
-            text, loss, train_err, balanced_train_err = eval_epoch(eval_train_loader, model,
+            text, loss, train_err, balanced_train_err, classwise_train_err = eval_epoch(eval_train_loader, model,
                                                                loss_adjust_cross_entropy, i, ' train_dataset', args,
                                                                params=[dy, ly, w_train])
         logfile.write(text+'\n')
-        text, loss, val_err, balanced_val_err = eval_epoch(eval_val_loader, model,
+        text, loss, val_err, balanced_val_err, classwise_val_err = eval_epoch(eval_val_loader, model,
                                                            cross_entropy, i, ' val_dataset', args, params=[dy, ly, w_val])
         logfile.write(text+'\n')
 
-        text, loss, test_err, balanced_test_err = eval_epoch(test_loader, model,
+        text, loss, test_err, balanced_test_err, classwise_test_err = eval_epoch(test_loader, model,
                                                              cross_entropy, i, ' test_dataset', args, params=[dy, ly])
         logfile.write(text+'\n')
     save_data["train_err"].append(train_err)
     save_data["balanced_train_err"].append(balanced_train_err)
+    save_data["classwise_train_err"].append(classwise_train_err)
     save_data["val_err"].append(val_err)
     save_data["balanced_val_err"].append(balanced_val_err)
+    save_data["classwise_val_err"].append(classwise_val_err)
     save_data["test_err"].append(test_err)
     save_data["balanced_test_err"].append(balanced_test_err)
+    save_data["classwise_test_err"].append(classwise_test_err)
 
     save_data["dy"].append(dy.detach().cpu().numpy().tolist())
     save_data["ly"].append(ly.detach().cpu().numpy().tolist())

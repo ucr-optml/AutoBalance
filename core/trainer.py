@@ -204,5 +204,5 @@ def eval_epoch(data_loader, model, criterion, cur_epoch, text, args, params=None
 
     text=f'{text}: Epoch {cur_epoch} :  Loss = {loss/total}   ACC = {correct/total*100.} Balanced ACC = {np.mean(class_correct/class_total*100.)} \n Class wise = {class_correct/class_total*100.}'
     print(text)
-    return text, loss/total, 100.-correct/total*100., 100.-float(np.mean(class_correct/class_total*100.))
+    return text, loss/total, 100.-correct/total*100., 100.-float(np.mean(class_correct/class_total*100.)), (100.-class_correct/class_total*100.).tolist()
 

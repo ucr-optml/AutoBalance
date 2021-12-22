@@ -50,7 +50,10 @@ args["up_configs"]["wy_init"]="Retrain"
 args["up_configs"]["aug_init"]="Retrain"
 args["up_configs"]["start_epoch"]=10000
 args["up_configs"]["end_epoch"]=-1
-
+print(args["up_configs"]["ly_LA_tau"],args["group_size"])
+if args["up_configs"]["ly_LA_tau"]==None:
+    args["group_size"]=1
+print(args["up_configs"]["ly_LA_tau"],args["group_size"])
 device = args["device"]
 dataset = args["dataset"]
 if dataset == 'Cifar10':
@@ -75,16 +78,18 @@ elif dataset == 'ImageNet':
     model = nn.DataParallel(model, device_ids=[0, 1])
 
     train_loader = ImageNetLTDataLoader(
-        '~/data/imagenet/ILSVRC/Data/CLS-LOC',
+        args["datapath"],
         training=True, batch_size=args["low_batch_size"])
     val_loader = train_loader.split_validation()
     test_loader = ImageNetLTDataLoader(
-        '~/imagenet/ILSVRC/Data/CLS-LOC',
+        args["datapath"],
         training=False, batch_size=args["low_batch_size"])
 
     num_train_samples, num_val_samples = train_loader.get_train_val_size()
-    eval_train_loader = train_loader
-    eval_val_loader = val_loader
+    eval_train_loader = ImageNetLTDataLoader(
+        args["datapath"],
+        training=True, batch_size=512)
+    eval_val_loader = eval_train_loader.split_validation()
 
 elif dataset == 'INAT':
     num_classes = 8142
@@ -105,13 +110,13 @@ args["num_classes"] = num_classes
 
 print_num_params(model)
 
-model = torch.load(f'{args["save_path"]}/init_model.pth')
+#model = torch.load(f'{args["save_path"]}/init_model.pth')
 model = model.to(device)
 
 criterion = nn.CrossEntropyLoss()
 
 with open(f'{args["save_path"]}/result.yaml','r') as f:
-    args["result"]=yaml.load(f,Loader=yaml.FullLoader)
+    args["result"]=yaml.load(f,Loader=yaml.UnsafeLoader)
 
 
 dy = get_init_dy(args, num_train_samples)
@@ -181,34 +186,36 @@ with open(f'{args["save_path"]}/retrain/config.yaml', mode='w') as config_log:
 
 save_data = {"ly": [], "dy": [], "w_train": [],
              "train_err": [], "balanced_train_err": [], 
-             "val_err": [], "balanced_val_err": [], "test_err": [], "balanced_test_err": []}
+             "val_err": [], "balanced_val_err": [], "test_err": [], "balanced_test_err": [],
+             "classwise_train_err": [], "classwise_val_err": [], "classwise_test_err": [] }
 with open(f'{args["save_path"]}/retrain/result.yaml', mode='w') as log:
     yaml.dump(save_data, log)
-
-args["group_size"]=1
 
 for i in range(args["checkpoint"], args["epoch"]+1):
     if i % args["checkpoint_interval"] == 0:
         torch.save(model, f'{args["save_path"]}/retrain/epoch_{i}.pth')
 
     if i % args["eval_interval"] == 0:
-        text, loss, train_err, balanced_train_err = eval_epoch(eval_train_loader, model,
+        text, loss, train_err, balanced_train_err, classwise_train_err = eval_epoch(eval_train_loader, model,
                                                                loss_adjust_cross_entropy, i, ' train_dataset', args,
                                                                params=[dy, ly, w_train])
         logfile.write(text+'\n')
-        text, loss, val_err, balanced_val_err = eval_epoch(eval_val_loader, model,
+        text, loss, val_err, balanced_val_err, classwise_val_err = eval_epoch(eval_val_loader, model,
                                                            cross_entropy, i, ' val_dataset', args, params=[dy, ly, w_val])
         logfile.write(text+'\n')
 
-        text, loss, test_err, balanced_test_err = eval_epoch(test_loader, model,
+        text, loss, test_err, balanced_test_err, classwise_test_err = eval_epoch(test_loader, model,
                                                              cross_entropy, i, ' test_dataset', args, params=[dy, ly])
         logfile.write(text+'\n')
     save_data["train_err"].append(train_err)
     save_data["balanced_train_err"].append(balanced_train_err)
+    save_data["classwise_train_err"].append(classwise_train_err)
     save_data["val_err"].append(val_err)
     save_data["balanced_val_err"].append(balanced_val_err)
+    save_data["classwise_val_err"].append(classwise_val_err)
     save_data["test_err"].append(test_err)
     save_data["balanced_test_err"].append(balanced_test_err)
+    save_data["classwise_test_err"].append(classwise_test_err)
 
     save_data["dy"].append(dy.detach().cpu().numpy().tolist())
     save_data["ly"].append(ly.detach().cpu().numpy().tolist())
