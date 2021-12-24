@@ -1,0 +1,83 @@
+# Dataset, either Cifar10/Cifar100/ImageNet/INAT
+dataset: ImageNet
+datapath: "[Your data path]/imagenet/ILSVRC/Data/CLS-LOC"
+device: cuda
+# Log and result save path
+save_path: results/ImageNet/dyly_no_init/1/
+checkpoint_interval: 10
+eval_interval: 5
+
+# The check point uses to resume the work
+checkpoint: 0
+model_file: ~
+
+# Ingore this because ImageNet-LT is fixed
+train_size: 5000
+val_size: 1000
+# Group size when apply group aggregation 
+group_size: 20
+
+
+# Model optimization lr (lower level)
+low_lr: 0.02
+low_lr_schedule:
+  - 80
+  - 100
+  - 120
+  - 140
+# Lower level batch size
+low_batch_size: 128
+low_lr_warmup: 5
+epoch: 150
+
+# For CIFAR only, the unbalance factor, 
+# and select wether the validation is balanced or not
+train_rho: 0.01
+balance_val: false
+
+
+# Hyper-parameter optimization lr and schedule (upper level)
+up_lr: 0.01
+up_lr_schedule:
+  - 80
+  - 100
+  - 120
+  - 140
+up_lr_warmup: 20
+# Upper level batch size
+up_train_batch_size: 64
+up_val_batch_size: 64
+
+
+# Upper level configs
+up_configs:
+  # Number of batches when computing hyper-gradient
+  train_batches: 10
+  val_batches: 10
+  # The upper optimization start and end epoch, 
+  end_epoch: 150
+  start_epoch: 40
+  # Interval of iterations/epochs when doing hyper update. 
+  # (It is mostly used to stabilize model training)
+  iter_interval: 30
+  epoch_interval: 1
+  # Select which parameter can be optimized
+  dy: True
+  ly: True
+  wy: false
+  aug: false
+
+  # Any initialization applied to dy,ly,wy
+  ly_init: Zeros 
+  dy_init: Ones
+  wy_init: Ones
+
+  # Parameters if use logit adjustment of CDT initialization
+  ly_LA_tau: ~
+  dy_CDT_gamma: ~
+
+
+
+
+
+
